@@ -1,10 +1,11 @@
 import * as UI from 'react-native';
-import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useState, useEffect } from 'react';
 
 import { useUploadMutation } from '../../redux/apiServices/uploadApi';
 
 const ImagePickerComponent = ({ navigation }) => {
+    const [confirmationMessage, setConfirmationMessage] = useState('');
     const [upload, { data, error, isLoading }] = useUploadMutation();
     const [selectedImages, setSelectedImages] = useState([]);
   
@@ -25,12 +26,24 @@ const ImagePickerComponent = ({ navigation }) => {
       try {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
           allowsMultipleSelection: true,
           selectionLimit: 5,
           quality: 1,
         });
-  
+
+        // CHECK THE SIZE OF THE IMAGES ARE BELOW 5MB
+        const sum = result.assets?.reduce((total, item) => total + item.fileSize, 0);
+        let fileSizeMB = sum / (1024 ** 2);
+
+        if (fileSizeMB > 5) {
+          alert(`Total image size can not exceed 5MB`);
+          return
+        }
+        // CHECK THE SIZE OF THE IMAGES ARE BELOW 5MB
+
         if (!result.canceled && result.assets) {
+
           const selectedImageURIs = result.assets.map((asset) => asset.uri);
           setSelectedImages((prevImages) => [...prevImages, ...selectedImageURIs]);
         }
@@ -40,19 +53,21 @@ const ImagePickerComponent = ({ navigation }) => {
     };
 
     const uploadImages = async () => {
+      if (selectedImages.length === 0) return alert(`Please select images to upload`);  
+      
         try {
-            const data = new FormData();
+            const formData = new FormData();
         
             for (let i = 0; i < selectedImages.length; i++) {
-                data.append(`image`, {
+              formData.append(`image`, {
                     uri: selectedImages[i],
                     type: 'image/jpeg',
                     name: 'photo.jpg',
                 });
             }
-          
-          const response = await upload(data);
-    
+          const { data } = await upload(formData);
+
+          setConfirmationMessage(data?.message);
           setSelectedImages([]);
         } catch (error) {
             console.error(error);
@@ -80,13 +95,18 @@ const ImagePickerComponent = ({ navigation }) => {
                         </UI.View>
                     </UI.TouchableOpacity>
                 ))}
+              {confirmationMessage && (
+                <UI.View style={styles.upload}>
+                  <UI.Text>{confirmationMessage}</UI.Text>
+                </UI.View>
+              )}
             </UI.View>
             :
-            <UI.View style={styles.upload}>
+              <UI.View style={styles.upload}>
                 <UI.ActivityIndicator size="large" color="rgba(0, 0, 0, .6)" />
                 <UI.Text>Uploading Images...</UI.Text>
-            </UI.View>
-        }
+              </UI.View>
+          }
       </UI.SafeAreaView>
     );
   };
